@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { type CliOptions, type OrmChoice, ormChoices, type PackageManager, packageManagers } from './types.js';
-import { isValidProjectName } from './utils.js';
+import { validateProjectName } from './utils.js';
 
 interface PromptResult {
   readonly projectName: string;
@@ -10,13 +10,27 @@ interface PromptResult {
   readonly force: boolean;
 }
 
+export function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY);
+}
+
 export async function promptForMissingOptions(options: CliOptions): Promise<PromptResult> {
-  const rl = createInterface({ input, output });
+  if (!isInteractive()) {
+    const missing: string[] = [];
+    if (!options.projectName) missing.push('<project-name>');
+    if (!options.orm) missing.push('--orm');
+    if (!options.packageManager) missing.push('--package-manager');
+    if (missing.length > 0) {
+      throw new Error(
+        `Non-interactive mode requires: ${missing.join(', ')}. Example: create-nestjs-backend my-api --orm prisma --package-manager pnpm`,
+      );
+    }
+  }
+
+  const rl = isInteractive() ? createInterface({ input, output }) : null;
   try {
     const projectName = options.projectName ?? (await promptProjectName(rl));
-    if (!isValidProjectName(projectName)) {
-      throw new Error('Project name must contain only letters, numbers, dots, underscores, and dashes.');
-    }
+    validateProjectName(projectName);
 
     const orm = options.orm ?? (await promptChoice(rl, 'Select ORM', ormChoices, 'prisma'));
     const packageManager =
@@ -24,21 +38,23 @@ export async function promptForMissingOptions(options: CliOptions): Promise<Prom
 
     return { projectName, orm, packageManager, force: options.force };
   } finally {
-    rl.close();
+    rl?.close();
   }
 }
 
-async function promptProjectName(rl: ReturnType<typeof createInterface>): Promise<string> {
+async function promptProjectName(rl: ReturnType<typeof createInterface> | null): Promise<string> {
+  if (!rl) return 'my-nest-backend';
   const answer = (await rl.question('Project name: ')).trim();
   return answer || 'my-nest-backend';
 }
 
 async function promptChoice<T extends readonly string[]>(
-  rl: ReturnType<typeof createInterface>,
+  rl: ReturnType<typeof createInterface> | null,
   label: string,
   choices: T,
   fallback: T[number],
 ): Promise<T[number]> {
+  if (!rl) return fallback;
   const answer = (await rl.question(`${label} (${choices.join('/')}) [${fallback}]: `)).trim();
   const selected = answer || fallback;
   if (!choices.includes(selected)) {

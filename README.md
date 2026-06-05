@@ -40,6 +40,10 @@ node dist/index.js my-api --orm drizzle --package-manager pnpm
 - `--package-manager pnpm|npm|yarn`
 - `--force` to write into a non-empty directory
 
+## Generated dependency versions
+
+Generated projects use caret-pinned versions curated in [`src/templates/dependency-versions.ts`](src/templates/dependency-versions.ts). Bump that manifest intentionally when upgrading the scaffold stack.
+
 ## Publish safety
 
 Before publishing, the package runs `prepublishOnly`, which builds the CLI, runs the integration tests, and checks the npm tarball contents.

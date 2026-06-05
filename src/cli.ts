@@ -1,9 +1,12 @@
-import { mkdir, readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { readdir } from 'node:fs/promises';
 import { generateProject } from './generator.js';
 import { promptForMissingOptions } from './prompts.js';
 import { type CliOptions, ormChoices, packageManagers } from './types.js';
-import { packageNameFromProjectName, printNextSteps } from './utils.js';
+import { packageNameFromProjectName, printNextSteps, resolveSafeProjectDirectory } from './utils.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
 
 export async function runCli(args: readonly string[]): Promise<void> {
   try {
@@ -12,12 +15,15 @@ export async function runCli(args: readonly string[]): Promise<void> {
       printHelp();
       return;
     }
+    if (parsed.version) {
+      console.log(version);
+      return;
+    }
 
     const answers = await promptForMissingOptions(parsed.options);
-    const targetDir = resolve(process.cwd(), answers.projectName);
+    const targetDir = resolveSafeProjectDirectory(process.cwd(), answers.projectName);
 
     await assertTargetDirectory(targetDir, answers.force);
-    await mkdir(targetDir, { recursive: true });
 
     await generateProject({
       ...answers,
@@ -33,7 +39,7 @@ export async function runCli(args: readonly string[]): Promise<void> {
   }
 }
 
-function parseArgs(args: readonly string[]): { help: boolean; options: CliOptions } {
+function parseArgs(args: readonly string[]): { help: boolean; version: boolean; options: CliOptions } {
   const options: CliOptions = { force: false };
   let projectName: string | undefined;
 
@@ -41,7 +47,8 @@ function parseArgs(args: readonly string[]): { help: boolean; options: CliOption
     const current = args[index];
     if (!current) continue;
 
-    if (current === '--help' || current === '-h') return { help: true, options };
+    if (current === '--help' || current === '-h') return { help: true, version: false, options };
+    if (current === '--version' || current === '-v') return { help: false, version: true, options };
     if (current === '--force' || current === '-f') {
       Object.assign(options, { force: true });
       continue;
@@ -72,6 +79,7 @@ function parseArgs(args: readonly string[]): { help: boolean; options: CliOption
 
   return {
     help: false,
+    version: false,
     options: projectName ? { ...options, projectName } : options,
   };
 }
@@ -96,5 +104,16 @@ async function assertTargetDirectory(targetDir: string, force: boolean): Promise
 }
 
 function printHelp(): void {
-  console.log(`create-nestjs-backend <project-name> [options]\n\nOptions:\n  --orm <typeorm|prisma|drizzle>       Select the ORM adapter\n  --package-manager <pnpm|npm|yarn>    Choose package manager\n  --force, -f                          Write into a non-empty directory\n  --help, -h                           Show this help\n`);
+  console.log(
+    `create-nestjs-backend <project-name> [options]\n\n` +
+      `Project name must be a subdirectory inside the current working directory (not "." or "..").\n\n` +
+      `Non-interactive usage requires all options:\n` +
+      `  create-nestjs-backend my-api --orm prisma --package-manager pnpm\n\n` +
+      `Options:\n` +
+      `  --orm <typeorm|prisma|drizzle>       Select the ORM adapter\n` +
+      `  --package-manager <pnpm|npm|yarn>    Choose package manager\n` +
+      `  --force, -f                          Merge into a non-empty directory (overwrites generated files only)\n` +
+      `  --version, -v                        Show CLI version\n` +
+      `  --help, -h                           Show this help\n`,
+  );
 }

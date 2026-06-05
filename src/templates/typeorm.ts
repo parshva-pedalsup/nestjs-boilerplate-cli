@@ -7,6 +7,7 @@ export function typeormFiles(_options: ProjectOptions): readonly FileEntry[] {
     { path: 'src/database/entities/session.entity.ts', content: sessionEntityTs() },
     { path: 'src/database/entities/account.entity.ts', content: accountEntityTs() },
     { path: 'src/database/entities/verification.entity.ts', content: verificationEntityTs() },
+    { path: 'src/health/database.health.ts', content: databaseHealthTs() },
   ];
 }
 
@@ -28,4 +29,8 @@ function accountEntityTs(): string {
 
 function verificationEntityTs(): string {
   return `import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';\n\n@Entity({ name: 'verification' })\nexport class VerificationEntity {\n  @PrimaryColumn({ type: 'text' }) id!: string;\n  @Column({ type: 'text' }) identifier!: string;\n  @Column({ type: 'text' }) value!: string;\n  @Column({ name: 'expires_at', type: 'timestamptz' }) expiresAt!: Date;\n  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;\n  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;\n}\n`;
+}
+
+function databaseHealthTs(): string {
+  return `import { Injectable } from '@nestjs/common';\nimport { HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';\nimport { InjectDataSource } from '@nestjs/typeorm';\nimport { DataSource } from 'typeorm';\n\n@Injectable()\nexport class DatabaseHealthIndicator {\n  constructor(\n    private readonly healthIndicatorService: HealthIndicatorService,\n    @InjectDataSource() private readonly dataSource: DataSource,\n  ) {}\n\n  async isHealthy(key: string): Promise<HealthIndicatorResult> {\n    const indicator = this.healthIndicatorService.check(key);\n    try {\n      await this.dataSource.query('SELECT 1');\n      return indicator.up();\n    } catch (error) {\n      const message = error instanceof Error ? error.message : 'Database unavailable';\n      return indicator.down({ message });\n    }\n  }\n}\n`;
 }

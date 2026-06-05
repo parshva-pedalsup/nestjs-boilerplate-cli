@@ -5,6 +5,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { assertUniqueFilePaths } from './generator.js';
+
+const require = createRequire(import.meta.url);
+const { version: cliVersion } = require('../package.json') as { version: string };
 
 const distDir = dirname(fileURLToPath(import.meta.url));
 const cliEntry = join(distDir, 'index.js');
@@ -14,8 +19,12 @@ after(async () => {
   await Promise.all(tempDirs.map(async (dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function runCli(args: readonly string[], cwd: string) {
-  return spawnSync(process.execPath, [cliEntry, ...args], { cwd, encoding: 'utf8' });
+function runCli(args: readonly string[], cwd: string, options?: { stdio?: 'pipe' | 'inherit' }) {
+  return spawnSync(process.execPath, [cliEntry, ...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: options?.stdio ?? 'pipe',
+  });
 }
 
 async function assertExists(path: string): Promise<void> {
@@ -44,6 +53,68 @@ async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
 
+function assertPinnedDependencies(packageJson: {
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  engines?: { node?: string };
+}): void {
+  assert.ok(packageJson.engines?.node);
+  for (const value of Object.values(packageJson.dependencies)) {
+    assert.notEqual(value, 'latest');
+  }
+  for (const value of Object.values(packageJson.devDependencies)) {
+    assert.notEqual(value, 'latest');
+  }
+}
+
+async function assertProductionScaffold(projectDir: string, orm: 'typeorm' | 'prisma' | 'drizzle'): Promise<void> {
+  const appModule = await readFile(join(projectDir, 'src/app.module.ts'), 'utf8');
+  assert.match(appModule, /ThrottlerGuard/);
+  assert.match(appModule, /APP_GUARD/);
+  assert.match(appModule, /PgPoolModule/);
+  assert.match(appModule, /PG_POOL/);
+  assert.match(appModule, /createAuth/);
+  assert.match(appModule, /AuthModule\.forRootAsync/);
+
+  const packageJson = await readJson<{ dependencies: Record<string, string> }>(join(projectDir, 'package.json'));
+  const betterAuthNest = packageJson.dependencies['@thallesp/nestjs-better-auth'];
+  assert.ok(betterAuthNest);
+  assert.match(betterAuthNest, /^[\^~]?2\./);
+
+  const mainTs = await readFile(join(projectDir, 'src/main.ts'), 'utf8');
+  assert.doesNotMatch(mainTs, /eval\(/);
+  assert.match(mainTs, /import compression = require\('compression'\)/);
+  assert.match(mainTs, /import\('@scalar\/nestjs-api-reference'\)/);
+
+  const tsconfig = await readJson<{ compilerOptions: Record<string, unknown> }>(join(projectDir, 'tsconfig.json'));
+  assert.equal(tsconfig.compilerOptions.esModuleInterop, true);
+
+  const envValidation = await readFile(join(projectDir, 'src/common/config/env.validation.ts'), 'utf8');
+  assert.match(envValidation, /MinLength\(32\)/);
+
+  const healthController = await readFile(join(projectDir, 'src/health/health.controller.ts'), 'utf8');
+  assert.match(healthController, /DatabaseHealthIndicator/);
+  assert.match(healthController, /SkipThrottle/);
+  assert.match(healthController, /checks: result\.details/);
+  assert.doesNotMatch(healthController, /@HealthCheck\(\)/);
+
+  await assertExists(join(projectDir, 'src/health/database.health.ts'));
+  await assertExists(join(projectDir, 'src/auth/auth.factory.ts'));
+  await assertExists(join(projectDir, 'src/database/pg-pool.module.ts'));
+  await assertExists(join(projectDir, 'test/app.service.spec.ts'));
+  await assertExists(join(projectDir, 'test/app.integration-spec.ts'));
+  await assertNotExists(join(projectDir, 'src/auth/auth.config.ts'));
+
+  const authFactory = await readFile(join(projectDir, 'src/auth/auth.factory.ts'), 'utf8');
+  assert.match(authFactory, /experimental: \{ joins: true \}/);
+  assert.match(authFactory, /email_verified/);
+
+  if (orm === 'drizzle') {
+    const databaseService = await readFile(join(projectDir, 'src/database/database.service.ts'), 'utf8');
+    assert.match(databaseService, /PG_POOL/);
+  }
+}
+
 async function generateProject(orm: 'typeorm' | 'prisma' | 'drizzle') {
   const workspace = await mkdtemp(join(tmpdir(), `create-nest-backend-${orm}-`));
   tempDirs.push(workspace);
@@ -60,6 +131,30 @@ test('prints help output', () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /create-nestjs-backend <project-name>/);
   assert.match(result.stdout, /--orm <typeorm\|prisma\|drizzle>/);
+  assert.match(result.stdout, /Non-interactive usage requires all options/);
+});
+
+test('prints version output', () => {
+  const result = runCli(['--version'], distDir);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout.trim(), cliVersion);
+});
+
+test('rejects unsafe project names', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-unsafe-'));
+  tempDirs.push(workspace);
+
+  for (const projectName of ['.', '..']) {
+    const result = runCli([projectName, '--orm', 'prisma', '--package-manager', 'npm'], workspace);
+    assert.notEqual(result.status, 0, `expected failure for project name: ${projectName}`);
+    assert.match(result.stderr, /subdirectory name inside the current working directory/);
+  }
+});
+
+test('rejects non-interactive runs without required flags', () => {
+  const result = runCli([], distDir, { stdio: 'pipe' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Non-interactive mode requires/);
 });
 
 test('rejects writing into a non-empty directory without --force', async () => {
@@ -74,6 +169,34 @@ test('rejects writing into a non-empty directory without --force', async () => {
   const result = runCli([projectName, '--orm', 'prisma', '--package-manager', 'npm'], workspace);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Target directory is not empty/);
+});
+
+test('merges into a non-empty directory with --force and preserves unrelated files', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-force-'));
+  tempDirs.push(workspace);
+
+  const projectName = 'force-project';
+  const projectDir = join(workspace, projectName);
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(join(projectDir, 'keep.txt'), 'do not delete', 'utf8');
+
+  const result = runCli([projectName, '--orm', 'prisma', '--package-manager', 'npm', '--force'], workspace);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const keep = await readFile(join(projectDir, 'keep.txt'), 'utf8');
+  assert.equal(keep, 'do not delete');
+  await assertExists(join(projectDir, 'package.json'));
+});
+
+test('assertUniqueFilePaths rejects duplicate template paths', () => {
+  assert.throws(
+    () =>
+      assertUniqueFilePaths([
+        { path: 'package.json', content: '{}' },
+        { path: 'package.json', content: '{}' },
+      ]),
+    /Duplicate template file path: package\.json/,
+  );
 });
 
 test('generates liquibase sample properties and properties-based migration scripts', async () => {
@@ -96,9 +219,13 @@ test('generates a working TypeORM scaffold shape', async () => {
   const { projectDir, output } = await generateProject('typeorm');
   assert.match(output, /Created sample-typeorm/);
 
-  const packageJson = await readJson<{ dependencies: Record<string, string> }>(join(projectDir, 'package.json'));
+  const packageJson = await readJson<{
+    dependencies: Record<string, string>;
+    devDependencies: Record<string, string>;
+  }>(join(projectDir, 'package.json'));
   assert.ok(packageJson.dependencies.typeorm);
   assert.ok(packageJson.dependencies['@nestjs/typeorm']);
+  assertPinnedDependencies(packageJson);
 
   await assertExists(join(projectDir, 'src/database/entities/account.entity.ts'));
   await assertExists(join(projectDir, 'src/database/entities/verification.entity.ts'));
@@ -106,14 +233,7 @@ test('generates a working TypeORM scaffold shape', async () => {
   const userEntity = await readFile(join(projectDir, 'src/database/entities/user.entity.ts'), 'utf8');
   assert.match(userEntity, /@Entity\(\{ name: 'user' \}\)/);
 
-  const authConfig = await readFile(join(projectDir, 'src/auth/auth.config.ts'), 'utf8');
-  assert.match(authConfig, /experimental: \{ joins: true \}/);
-  assert.match(authConfig, /email_verified/);
-
-  const mainTs = await readFile(join(projectDir, 'src/main.ts'), 'utf8');
-  assert.match(mainTs, /cdn\.jsdelivr\.net/);
-  assert.match(mainTs, /url: '\/openapi\.json'/);
-  assert.doesNotMatch(mainTs, /from '@scalar\/nestjs-api-reference'/);
+  await assertProductionScaffold(projectDir, 'typeorm');
 });
 
 test('generates a working Prisma scaffold shape', async () => {
@@ -122,14 +242,25 @@ test('generates a working Prisma scaffold shape', async () => {
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
     scripts: Record<string, string>;
+    engines?: { node?: string };
   }>(join(projectDir, 'package.json'));
 
   assert.ok(packageJson.dependencies['@prisma/adapter-pg']);
   assert.ok(packageJson.dependencies['@prisma/client']);
   assert.ok(packageJson.devDependencies.prisma);
+  assert.match(packageJson.dependencies['@prisma/client'], /^[\^~]?7\./);
+  assert.match(packageJson.dependencies['@prisma/adapter-pg'], /^[\^~]?7\./);
+  assert.match(packageJson.devDependencies.prisma, /^[\^~]?7\./);
+  assert.equal(packageJson.engines?.node, '>=20.19.0');
   assert.equal(packageJson.scripts.postinstall, 'prisma generate');
+  assert.equal(packageJson.scripts['test:integration'], 'vitest run test/app.integration-spec.ts');
+  assertPinnedDependencies(packageJson);
 
   await assertExists(join(projectDir, 'prisma.config.ts'));
+
+  const prismaConfig = await readFile(join(projectDir, 'prisma.config.ts'), 'utf8');
+  assert.match(prismaConfig, /env\('DATABASE_URL'\)/);
+  assert.doesNotMatch(prismaConfig, /process\.env\.DATABASE_URL/);
 
   const schema = await readFile(join(projectDir, 'prisma/schema.prisma'), 'utf8');
   assert.match(schema, /provider\s+=\s+"prisma-client"/);
@@ -141,6 +272,8 @@ test('generates a working Prisma scaffold shape', async () => {
   const prismaService = await readFile(join(projectDir, 'src/database/prisma.service.ts'), 'utf8');
   assert.match(prismaService, /PrismaPg/);
   assert.match(prismaService, /generated\/prisma\/client/);
+
+  await assertProductionScaffold(projectDir, 'prisma');
 });
 
 test('generates a working Drizzle scaffold shape', async () => {
@@ -148,13 +281,17 @@ test('generates a working Drizzle scaffold shape', async () => {
   const packageJson = await readJson<{
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
+    engines?: { node?: string };
   }>(join(projectDir, 'package.json'));
 
   assert.ok(packageJson.dependencies['drizzle-orm']);
   assert.ok(packageJson.devDependencies['drizzle-kit']);
+  assertPinnedDependencies(packageJson);
 
   const schema = await readFile(join(projectDir, 'src/database/schema.ts'), 'utf8');
   assert.match(schema, /pgTable\('user'/);
   assert.match(schema, /pgTable\('account'/);
   assert.match(schema, /pgTable\('verification'/);
+
+  await assertProductionScaffold(projectDir, 'drizzle');
 });

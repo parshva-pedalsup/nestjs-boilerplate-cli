@@ -1,4 +1,10 @@
 import { type OrmChoice, type ProjectOptions } from '../types.js';
+import {
+  devDependencies as pinnedDevDependencies,
+  ormDevDependencies,
+  ormRuntimeDependencies,
+  runtimeDependencies as pinnedRuntimeDependencies,
+} from './dependency-versions.js';
 
 export function json(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
@@ -6,79 +12,25 @@ export function json(value: unknown): string {
 
 export function packageJson(options: ProjectOptions): string {
   const dependencies: Record<string, string> = {
-    '@nestjs/common': 'latest',
-    '@nestjs/config': 'latest',
-    '@nestjs/core': 'latest',
-    '@nestjs/platform-express': 'latest',
-    '@nestjs/swagger': 'latest',
-    '@nestjs/terminus': 'latest',
-    '@nestjs/throttler': 'latest',
-    '@scalar/nestjs-api-reference': 'latest',
-    '@thallesp/nestjs-better-auth': 'latest',
-    'better-auth': 'latest',
-    'class-transformer': 'latest',
-    'class-validator': 'latest',
-    compression: 'latest',
-    helmet: 'latest',
-    'nestjs-pino': 'latest',
-    pg: 'latest',
-    pino: 'latest',
-    'pino-http': 'latest',
-    'reflect-metadata': 'latest',
-    rxjs: 'latest',
+    ...pinnedRuntimeDependencies,
+    ...ormRuntimeDependencies[options.orm],
   };
 
   const devDependencies: Record<string, string> = {
-    '@nestjs/cli': 'latest',
-    '@nestjs/schematics': 'latest',
-    '@nestjs/testing': 'latest',
-    '@types/compression': 'latest',
-    '@types/express': 'latest',
-    '@types/node': 'latest',
-    '@types/pg': 'latest',
-    '@types/supertest': 'latest',
-    dotenv: 'latest',
-    oxfmt: 'latest',
-    oxlint: 'latest',
-    supertest: 'latest',
-    'tsconfig-paths': 'latest',
-    'ts-node': 'latest',
-    tsx: 'latest',
-    typescript: 'latest',
-    vitest: 'latest',
+    ...pinnedDevDependencies,
+    ...ormDevDependencies[options.orm],
   };
-
-  addOrmDependencies(options.orm, dependencies, devDependencies);
 
   return json({
     name: options.packageName,
     version: '0.1.0',
     private: true,
     type: 'commonjs',
+    engines: { node: '>=20.19.0' },
     scripts: scriptsFor(options.orm),
     dependencies,
     devDependencies,
   });
-}
-
-function addOrmDependencies(
-  orm: OrmChoice,
-  dependencies: Record<string, string>,
-  devDependencies: Record<string, string>,
-): void {
-  if (orm === 'typeorm') {
-    dependencies['@nestjs/typeorm'] = 'latest';
-    dependencies.typeorm = 'latest';
-  }
-  if (orm === 'prisma') {
-    dependencies['@prisma/adapter-pg'] = 'latest';
-    dependencies['@prisma/client'] = 'latest';
-    devDependencies.prisma = 'latest';
-  }
-  if (orm === 'drizzle') {
-    dependencies['drizzle-orm'] = 'latest';
-    devDependencies['drizzle-kit'] = 'latest';
-  }
 }
 
 function scriptsFor(orm: OrmChoice): Record<string, string> {
@@ -93,6 +45,7 @@ function scriptsFor(orm: OrmChoice): Record<string, string> {
     'format:check': 'oxfmt --check .',
     test: 'vitest run',
     'test:watch': 'vitest',
+    'test:integration': 'vitest run test/app.integration-spec.ts',
     'db:migrate': 'docker compose run --rm liquibase update',
     'db:rollback': 'docker compose run --rm liquibase rollback-count --count=1',
   };
