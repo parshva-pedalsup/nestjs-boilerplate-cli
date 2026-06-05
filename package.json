@@ -1,0 +1,32 @@
+{
+  "name": "create-nest-backend",
+  "version": "0.1.0",
+  "description": "An opinionated NestJS backend stack generator with ORM choices, Better Auth, Liquibase, Scalar, Oxc tooling, and strict TypeScript.",
+  "type": "module",
+  "bin": {
+    "create-nest-backend": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "test": "node --test dist/**/*.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "oxfmt": "latest",
+    "oxlint": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
