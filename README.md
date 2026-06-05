@@ -17,7 +17,13 @@ An opinionated NestJS backend generator: think “T3 Stack energy”, but for pr
 ## Usage
 
 ```bash
-npm create nest-backend my-api -- --orm prisma
+npm create nestjs-backend my-api -- --orm prisma
+```
+
+Or run the package directly:
+
+```bash
+npx create-nestjs-backend my-api --orm prisma
 ```
 
 Local development:
@@ -33,6 +39,21 @@ node dist/index.js my-api --orm drizzle --package-manager pnpm
 - `--orm typeorm|prisma|drizzle`
 - `--package-manager pnpm|npm|yarn`
 - `--force` to write into a non-empty directory
+
+## Publish safety
+
+Before publishing, the package runs `prepublishOnly`, which builds the CLI, runs the integration tests, and checks the npm tarball contents.
+
+Recommended release flow:
+
+```bash
+npm run build
+npm test
+npm pack --dry-run
+npm publish
+```
+
+For stronger supply-chain verification, publish from CI with npm 2FA enabled and use npm provenance/trusted publishing where possible.
 
 ## Philosophy
 

@@ -96,5 +96,5 @@ async function assertTargetDirectory(targetDir: string, force: boolean): Promise
 }
 
 function printHelp(): void {
-  console.log(`create-nest-backend <project-name> [options]\n\nOptions:\n  --orm <typeorm|prisma|drizzle>       Select the ORM adapter\n  --package-manager <pnpm|npm|yarn>    Choose package manager\n  --force, -f                          Write into a non-empty directory\n  --help, -h                           Show this help\n`);
+  console.log(`create-nestjs-backend <project-name> [options]\n\nOptions:\n  --orm <typeorm|prisma|drizzle>       Select the ORM adapter\n  --package-manager <pnpm|npm|yarn>    Choose package manager\n  --force, -f                          Write into a non-empty directory\n  --help, -h                           Show this help\n`);
 }

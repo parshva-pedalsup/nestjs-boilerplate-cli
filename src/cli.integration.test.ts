@@ -40,7 +40,7 @@ async function generateProject(orm: 'typeorm' | 'prisma' | 'drizzle') {
 test('prints help output', () => {
   const result = runCli(['--help'], distDir);
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /create-nest-backend <project-name>/);
+  assert.match(result.stdout, /create-nestjs-backend <project-name>/);
   assert.match(result.stdout, /--orm <typeorm\|prisma\|drizzle>/);
 });
 

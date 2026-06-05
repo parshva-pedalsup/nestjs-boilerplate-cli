@@ -1,13 +1,42 @@
 {
-  "name": "create-nest-backend",
+  "name": "create-nestjs-backend",
   "version": "0.1.0",
   "description": "An opinionated NestJS backend stack generator with ORM choices, Better Auth, Liquibase, Scalar, Oxc tooling, and strict TypeScript.",
   "type": "module",
+  "license": "MIT",
+  "author": "Parshva Shah",
+  "homepage": "https://github.com/parshva-pedalsup/nestjs-boilerplate-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parshva-pedalsup/nestjs-boilerplate-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/parshva-pedalsup/nestjs-boilerplate-cli/issues"
+  },
+  "keywords": [
+    "nestjs",
+    "cli",
+    "boilerplate",
+    "prisma",
+    "typeorm",
+    "drizzle",
+    "liquibase",
+    "better-auth",
+    "postgresql",
+    "scalar"
+  ],
   "bin": {
+    "create-nestjs-backend": "./dist/index.js",
     "create-nest-backend": "./dist/index.js"
   },
   "files": [
-    "dist",
+    "dist/index.js",
+    "dist/cli.js",
+    "dist/generator.js",
+    "dist/prompts.js",
+    "dist/types.js",
+    "dist/utils.js",
+    "dist/templates/*.js",
     "README.md"
   ],
   "scripts": {
@@ -16,6 +45,8 @@
     "lint": "oxlint .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run build && npm run test && npm run pack:check",
     "test": "node --test dist/**/*.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
