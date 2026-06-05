@@ -22,6 +22,24 @@ async function assertExists(path: string): Promise<void> {
   await access(path);
 }
 
+async function assertNotExists(path: string): Promise<void> {
+  await assert.rejects(() => access(path));
+}
+
+async function assertLiquibaseScaffold(projectDir: string): Promise<void> {
+  await assertExists(join(projectDir, 'liquibase.sample.properties'));
+  await assertNotExists(join(projectDir, 'liquibase.properties'));
+
+  const gitignore = await readFile(join(projectDir, '.gitignore'), 'utf8');
+  assert.match(gitignore, /liquibase\.properties/);
+  assert.match(gitignore, /!liquibase\.sample\.properties/);
+
+  const packageJson = await readJson<{ scripts: Record<string, string> }>(join(projectDir, 'package.json'));
+  assert.equal(packageJson.scripts['db:migrate'], 'docker compose run --rm liquibase update');
+  assert.equal(packageJson.scripts['db:rollback'], 'docker compose run --rm liquibase rollback-count --count=1');
+  assert.doesNotMatch(packageJson.scripts['db:migrate'], /--url=/);
+}
+
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
@@ -58,6 +76,22 @@ test('rejects writing into a non-empty directory without --force', async () => {
   assert.match(result.stderr, /Target directory is not empty/);
 });
 
+test('generates liquibase sample properties and properties-based migration scripts', async () => {
+  const { projectDir, output } = await generateProject('prisma');
+  assert.match(output, /cp liquibase\.sample\.properties liquibase\.properties/);
+  await assertLiquibaseScaffold(projectDir);
+
+  const sample = await readFile(join(projectDir, 'liquibase.sample.properties'), 'utf8');
+  assert.match(sample, /changeLogFile: db\.changelog-master\.yaml/);
+  assert.doesNotMatch(sample, /liquibase\.command\.url:/);
+  assert.match(sample, /POSTGRES_PORT/);
+
+  const compose = await readFile(join(projectDir, 'docker-compose.yml'), 'utf8');
+  assert.match(compose, /liquibase\/liquibase:5\.0\.3/);
+  assert.match(compose, /liquibase\.docker\.properties/);
+  assert.match(compose, /LIQUIBASE_COMMAND_URL: jdbc:postgresql:\/\/postgres:5432\/\$\{POSTGRES_DB:-app\}/);
+});
+
 test('generates a working TypeORM scaffold shape', async () => {
   const { projectDir, output } = await generateProject('typeorm');
   assert.match(output, /Created sample-typeorm/);
@@ -75,6 +109,11 @@ test('generates a working TypeORM scaffold shape', async () => {
   const authConfig = await readFile(join(projectDir, 'src/auth/auth.config.ts'), 'utf8');
   assert.match(authConfig, /experimental: \{ joins: true \}/);
   assert.match(authConfig, /email_verified/);
+
+  const mainTs = await readFile(join(projectDir, 'src/main.ts'), 'utf8');
+  assert.match(mainTs, /cdn\.jsdelivr\.net/);
+  assert.match(mainTs, /url: '\/openapi\.json'/);
+  assert.doesNotMatch(mainTs, /from '@scalar\/nestjs-api-reference'/);
 });
 
 test('generates a working Prisma scaffold shape', async () => {

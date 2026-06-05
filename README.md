@@ -57,4 +57,4 @@ For stronger supply-chain verification, publish from CI with npm 2FA enabled and
 
 ## Philosophy
 
-Liquibase owns schema migrations. ORM entities/schemas are application mapping layers and must stay aligned with Liquibase changelogs.
+Liquibase owns schema migrations. ORM entities/schemas are application mapping layers and must stay aligned with Liquibase changelogs. Generated projects ship `liquibase.sample.properties`; copy it to `liquibase.properties` for local migration config (same pattern as `.env.example` → `.env`).

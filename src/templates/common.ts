@@ -15,7 +15,7 @@ export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
     { path: 'tsconfig.build.json', content: tsconfigBuild() },
     { path: 'vitest.config.ts', content: vitestConfig() },
     { path: 'docker-compose.yml', content: dockerCompose() },
-    { path: 'liquibase.properties', content: liquibaseProperties() },
+    { path: 'liquibase.sample.properties', content: liquibaseSampleProperties() },
     { path: 'migrations/db.changelog-master.yaml', content: changelogMaster() },
     { path: 'migrations/changes/001-auth-tables.yaml', content: authTablesChangelog() },
     { path: 'src/main.ts', content: mainTs(options) },
@@ -33,11 +33,11 @@ export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
 }
 
 function readme(options: ProjectOptions): string {
-  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\n${options.packageManager} install\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production.\n`;
+  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production.\n`;
 }
 
 function architectureNotes(options: ProjectOptions): string {
-  return `# Architecture Notes\n\n## Opinionated choices\n\n- NestJS owns HTTP, dependency injection, validation, and module boundaries.\n- ${options.orm} is used for application data access.\n- Liquibase owns database schema migrations; ORM sync/migrate commands should not mutate production schema.\n- Better Auth owns authentication endpoints and session lifecycle.\n- Scalar renders API docs from the OpenAPI document. Swagger UI is intentionally disabled.\n- Oxlint and Oxfmt replace ESLint and Prettier.\n\n## Database migration rule\n\nCreate every schema change in \`migrations/changes/*.yaml\` and include it from \`migrations/db.changelog-master.yaml\`. Keep the ORM schema/entity files aligned with Liquibase changes.\n\n## Production checklist\n\n- Replace \`BETTER_AUTH_SECRET\` with a long random secret.\n- Restrict CORS origins.\n- Run behind TLS.\n- Use managed Postgres backups.\n- Run \`typecheck\`, \`lint\`, \`format:check\`, and tests in CI.\n`;
+  return `# Architecture Notes\n\n## Opinionated choices\n\n- NestJS owns HTTP, dependency injection, validation, and module boundaries.\n- ${options.orm} is used for application data access.\n- Liquibase owns database schema migrations; ORM sync/migrate commands should not mutate production schema.\n- Better Auth owns authentication endpoints and session lifecycle.\n- Scalar renders API docs at \`/docs\` from \`/openapi.json\`. Swagger UI is intentionally disabled. Helmet CSP is configured to allow Scalar CDN assets.\n- Oxlint and Oxfmt replace ESLint and Prettier.\n\n## Liquibase configuration\n\nCopy \`liquibase.sample.properties\` to \`liquibase.properties\` before running migrations. Keep the sample committed; the local properties file is gitignored. For \`db:migrate\`, Docker Compose supplies JDBC settings from \`.env\` \`POSTGRES_*\` variables using the internal URL \`postgres:5432\`. \`POSTGRES_PORT\` only controls the host port mapping (e.g. \`localhost:5433\`) and does not apply inside the Compose network.\n\n## Database migration rule\n\nCreate every schema change in \`migrations/changes/*.yaml\` and include it from \`migrations/db.changelog-master.yaml\`. Keep the ORM schema/entity files aligned with Liquibase changes.\n\n## Production checklist\n\n- Replace \`BETTER_AUTH_SECRET\` with a long random secret.\n- Restrict CORS origins.\n- Run behind TLS.\n- Use managed Postgres backups.\n- Run \`typecheck\`, \`lint\`, \`format:check\`, and tests in CI.\n`;
 }
 
 function envExample(): string {
@@ -45,7 +45,7 @@ function envExample(): string {
 }
 
 function gitignore(): string {
-  return `node_modules/\ndist/\ncoverage/\n.env\n.env.*\n!.env.example\n*.log\n.DS_Store\n`;
+  return `node_modules/\ndist/\ncoverage/\n.env\n.env.*\n!.env.example\nliquibase.properties\n!liquibase.sample.properties\n*.log\n.DS_Store\n`;
 }
 
 function oxlintConfig(): string {
@@ -69,15 +69,15 @@ function vitestConfig(): string {
 }
 
 function dockerCompose(): string {
-  return `services:\n  postgres:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n      POSTGRES_DB: app\n    ports:\n      - '5432:5432'\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U postgres -d app']\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\n  liquibase:\n    image: liquibase/liquibase:latest\n    depends_on:\n      postgres:\n        condition: service_healthy\n    volumes:\n      - ./migrations:/liquibase/changelog\n      - ./liquibase.properties:/liquibase/liquibase.properties\n    working_dir: /liquibase\n\nvolumes:\n  postgres_data:\n`;
+  return `services:\n  postgres:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n      POSTGRES_DB: app\n    ports:\n      - '\${POSTGRES_PORT:-5432}:5432'\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U postgres -d app']\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\n  liquibase:\n    image: liquibase/liquibase:5.0.3\n    entrypoint: ['/bin/sh', '-c', 'lpm add postgresql --global >/dev/null 2>&1 || true; exec /liquibase/docker-entrypoint.sh "$@"', '--']\n    depends_on:\n      postgres:\n        condition: service_healthy\n    environment:\n      LIQUIBASE_COMMAND_URL: jdbc:postgresql://postgres:5432/\${POSTGRES_DB:-app}\n      LIQUIBASE_COMMAND_USERNAME: \${POSTGRES_USER:-postgres}\n      LIQUIBASE_COMMAND_PASSWORD: \${POSTGRES_PASSWORD:-postgres}\n    volumes:\n      - ./migrations:/liquibase/changelog\n      - ./liquibase.properties:/liquibase/liquibase.docker.properties\n    working_dir: /liquibase\n\nvolumes:\n  postgres_data:\n`;
 }
 
-function liquibaseProperties(): string {
-  return `changelogFile=changelog/db.changelog-master.yaml\nurl=jdbc:postgresql://postgres:5432/app\nusername=postgres\npassword=postgres\ndriver=org.postgresql.Driver\n`;
+function liquibaseSampleProperties(): string {
+  return `# Copy to liquibase.properties before running migrations:\n#   cp liquibase.sample.properties liquibase.properties\n#\n# JDBC settings for pnpm db:migrate are provided by docker-compose using .env\n# POSTGRES_* values with the internal service URL (postgres:5432). POSTGRES_PORT\n# only maps the host port (e.g. localhost:5433) and must not be used here.\n\nchangeLogFile: db.changelog-master.yaml\n`;
 }
 
 function changelogMaster(): string {
-  return `databaseChangeLog:\n  - include:\n      file: changelog/changes/001-auth-tables.yaml\n      relativeToChangelogFile: true\n`;
+  return `databaseChangeLog:\n  - include:\n      file: changes/001-auth-tables.yaml\n      relativeToChangelogFile: true\n`;
 }
 
 function authTablesChangelog(): string {
@@ -87,7 +87,7 @@ function authTablesChangelog(): string {
 }
 
 function mainTs(options: ProjectOptions): string {
-  return `import { ValidationPipe, VersioningType } from '@nestjs/common';\nimport { ConfigService } from '@nestjs/config';\nimport { NestFactory } from '@nestjs/core';\nimport { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';\nimport { apiReference } from '@scalar/nestjs-api-reference';\nimport compression from 'compression';\nimport helmet from 'helmet';\nimport { AppModule } from './app.module';\nimport { HttpExceptionFilter } from './common/filters/http-exception.filter';\n\nasync function bootstrap(): Promise<void> {\n  const app = await NestFactory.create(AppModule, { bufferLogs: true });\n  const config = app.get(ConfigService);\n  const port = config.getOrThrow<number>('PORT');\n\n  app.enableShutdownHooks();\n  app.enableCors({ origin: config.getOrThrow<string>('APP_ORIGIN'), credentials: true });\n  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });\n  app.use(helmet());\n  app.use(compression());\n  app.useGlobalFilters(new HttpExceptionFilter());\n  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));\n\n  const openApiConfig = new DocumentBuilder()\n    .setTitle('${appTitle(options)} API')\n    .setDescription('Production-grade NestJS API')\n    .setVersion('1.0.0')\n    .addBearerAuth()\n    .build();\n  const document = SwaggerModule.createDocument(app, openApiConfig);\n  SwaggerModule.setup('openapi', app, document, { swaggerUiEnabled: false });\n  app.use('/docs', apiReference({ content: document, pageTitle: '${appTitle(options)} API Docs' }));\n\n  await app.listen(port);\n}\n\nvoid bootstrap();\n`;
+  return `import { ValidationPipe, VersioningType } from '@nestjs/common';\nimport { ConfigService } from '@nestjs/config';\nimport { NestFactory } from '@nestjs/core';\nimport { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';\nimport compression from 'compression';\nimport helmet from 'helmet';\nimport { AppModule } from './app.module';\nimport { HttpExceptionFilter } from './common/filters/http-exception.filter';\n\nasync function bootstrap(): Promise<void> {\n  const app = await NestFactory.create(AppModule, { bufferLogs: true });\n  const config = app.get(ConfigService);\n  const port = config.getOrThrow<number>('PORT');\n\n  app.enableShutdownHooks();\n  app.enableCors({ origin: config.getOrThrow<string>('APP_ORIGIN'), credentials: true });\n  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });\n  app.use(\n    helmet({\n      crossOriginEmbedderPolicy: false,\n      contentSecurityPolicy: {\n        directives: {\n          defaultSrc: ["'self'", 'unpkg.com'],\n          styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'unpkg.com'],\n          fontSrc: ["'self'", 'fonts.gstatic.com', 'fonts.scalar.com', 'data:'],\n          imgSrc: ["'self'", 'data:', 'cdn.jsdelivr.net'],\n          scriptSrc: ["'self'", "https: 'unsafe-inline'", 'cdn.jsdelivr.net', "'unsafe-eval'"],\n          connectSrc: ["'self'", 'cdn.jsdelivr.net', 'proxy.scalar.com'],\n        },\n      },\n    }),\n  );\n  app.use(compression());\n  app.useGlobalFilters(new HttpExceptionFilter());\n  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));\n\n  const openApiConfig = new DocumentBuilder()\n    .setTitle('${appTitle(options)} API')\n    .setDescription('Production-grade NestJS API')\n    .setVersion('1.0.0')\n    .addBearerAuth()\n    .build();\n  const document = SwaggerModule.createDocument(app, openApiConfig);\n  SwaggerModule.setup('openapi', app, document, { swaggerUiEnabled: false, jsonDocumentUrl: 'openapi.json' });\n\n  const { apiReference } = await eval("import('@scalar/nestjs-api-reference')");\n  app.use(\n    '/docs',\n    apiReference({\n      url: '/openapi.json',\n      pageTitle: '${appTitle(options)} API Docs',\n    }),\n  );\n\n  await app.listen(port);\n}\n\nvoid bootstrap();\n`;
 }
 
 function appModuleTs(): string {
@@ -95,7 +95,7 @@ function appModuleTs(): string {
 }
 
 function appControllerTs(): string {
-  return `import { Controller, Get } from '@nestjs/common';\nimport { ApiOkResponse, ApiTags } from '@nestjs/swagger';\nimport { AppService } from './app.service';\n\n@ApiTags('app')\n@Controller({ path: '/', version: '1' })\nexport class AppController {\n  constructor(private readonly appService: AppService) {}\n\n  @Get()\n  @ApiOkResponse({ description: 'API metadata' })\n  getRoot(): { name: string; uptime: number } {\n    return this.appService.getRoot();\n  }\n}\n`;
+  return `import { Controller, Get } from '@nestjs/common';\nimport { ApiOkResponse, ApiTags } from '@nestjs/swagger';\nimport { Public } from '@thallesp/nestjs-better-auth';\nimport { AppService } from './app.service';\n\n@Public()\n@ApiTags('app')\n@Controller({ path: '/', version: '1' })\nexport class AppController {\n  constructor(private readonly appService: AppService) {}\n\n  @Get()\n  @ApiOkResponse({ description: 'API metadata' })\n  getRoot(): { name: string; uptime: number } {\n    return this.appService.getRoot();\n  }\n}\n`;
 }
 
 function appServiceTs(): string {
@@ -125,7 +125,7 @@ function healthModuleTs(): string {
 }
 
 function healthControllerTs(): string {
-  return `import { Controller, Get } from '@nestjs/common';\nimport { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';\nimport { ApiTags } from '@nestjs/swagger';\n\n@ApiTags('health')\n@Controller({ path: 'health', version: '1' })\nexport class HealthController {\n  constructor(private readonly health: HealthCheckService, private readonly memory: MemoryHealthIndicator) {}\n\n  @Get()\n  @HealthCheck()\n  check() {\n    return this.health.check([() => this.memory.checkHeap('memory_heap', 200 * 1024 * 1024)]);\n  }\n}\n`;
+  return `import { Controller, Get } from '@nestjs/common';\nimport { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';\nimport { ApiTags } from '@nestjs/swagger';\nimport { Public } from '@thallesp/nestjs-better-auth';\n\n@Public()\n@ApiTags('health')\n@Controller({ path: 'health', version: '1' })\nexport class HealthController {\n  constructor(private readonly health: HealthCheckService, private readonly memory: MemoryHealthIndicator) {}\n\n  @Get()\n  @HealthCheck()\n  check() {\n    return this.health.check([() => this.memory.checkHeap('memory_heap', 200 * 1024 * 1024)]);\n  }\n}\n`;
 }
 
 function e2eSpecTs(): string {

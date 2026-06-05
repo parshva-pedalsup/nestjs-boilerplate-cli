@@ -84,9 +84,9 @@ function addOrmDependencies(
 function scriptsFor(orm: OrmChoice): Record<string, string> {
   const scripts: Record<string, string> = {
     build: 'nest build',
-    start: 'node dist/main.js',
+    start: 'node dist/src/main.js',
     'start:dev': 'nest start --watch',
-    'start:prod': 'node dist/main.js',
+    'start:prod': 'node dist/src/main.js',
     typecheck: 'tsc -p tsconfig.json --noEmit',
     lint: 'oxlint .',
     format: 'oxfmt --write .',
@@ -94,7 +94,7 @@ function scriptsFor(orm: OrmChoice): Record<string, string> {
     test: 'vitest run',
     'test:watch': 'vitest',
     'db:migrate': 'docker compose run --rm liquibase update',
-    'db:rollback': 'docker compose run --rm liquibase rollbackCount 1',
+    'db:rollback': 'docker compose run --rm liquibase rollback-count --count=1',
   };
 
   if (orm === 'prisma') {
