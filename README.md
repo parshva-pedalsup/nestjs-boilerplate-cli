@@ -38,7 +38,15 @@ node dist/index.js my-api --orm drizzle --package-manager pnpm
 
 - `--orm typeorm|prisma|drizzle`
 - `--package-manager pnpm|npm|yarn`
+- `--agents-md` to generate a root `AGENTS.md` for AI coding assistants (Cursor, Codex, Claude Code, etc.)
+- `--no-agents-md` to skip `AGENTS.md` when scaffolding interactively
 - `--force` to write into a non-empty directory
+
+Example with agent instructions:
+
+```bash
+npx create-nestjs-backend my-api --orm prisma --package-manager pnpm --agents-md
+```
 
 ## Generated dependency versions
 

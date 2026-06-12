@@ -1,6 +1,6 @@
 {
   "name": "create-nestjs-backend",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "An opinionated NestJS backend stack generator with ORM choices, Better Auth, Liquibase, Scalar, Oxc tooling, and strict TypeScript.",
   "type": "module",
   "license": "MIT",

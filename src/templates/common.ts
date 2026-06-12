@@ -1,10 +1,12 @@
 import { type FileEntry, type ProjectOptions } from '../types.js';
+import { agentsMd } from './agents-md.js';
 import { appTitle, json, packageJson } from './helpers.js';
 
 export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
   return [
     { path: 'package.json', content: packageJson(options) },
     { path: 'README.md', content: readme(options) },
+    ...(options.withAgentsMd ? [{ path: 'AGENTS.md', content: agentsMd(options) }] : []),
     { path: 'docs/architecture.md', content: architectureNotes(options) },
     { path: '.env.example', content: envExample() },
     { path: '.gitignore', content: gitignore() },

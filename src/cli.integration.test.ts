@@ -131,6 +131,7 @@ test('prints help output', () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /create-nestjs-backend <project-name>/);
   assert.match(result.stdout, /--orm <typeorm\|prisma\|drizzle>/);
+  assert.match(result.stdout, /--agents-md/);
   assert.match(result.stdout, /Non-interactive usage requires all options/);
 });
 
@@ -274,6 +275,28 @@ test('generates a working Prisma scaffold shape', async () => {
   assert.match(prismaService, /generated\/prisma\/client/);
 
   await assertProductionScaffold(projectDir, 'prisma');
+});
+
+test('omits AGENTS.md by default', async () => {
+  const { projectDir } = await generateProject('prisma');
+  await assertNotExists(join(projectDir, 'AGENTS.md'));
+});
+
+test('generates AGENTS.md when --agents-md is passed', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-agents-'));
+  tempDirs.push(workspace);
+
+  const projectName = 'agents-project';
+  const result = runCli([projectName, '--orm', 'drizzle', '--package-manager', 'pnpm', '--agents-md'], workspace);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const projectDir = join(workspace, projectName);
+  const agents = await readFile(join(projectDir, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /^# Agents Project — Agent Instructions/);
+  assert.match(agents, /drizzle/);
+  assert.match(agents, /pnpm start:dev/);
+  assert.match(agents, /Liquibase owns schema/);
+  assert.match(agents, /pnpm db:studio/);
 });
 
 test('generates a working Drizzle scaffold shape', async () => {

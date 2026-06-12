@@ -8,6 +8,7 @@ interface PromptResult {
   readonly orm: OrmChoice;
   readonly packageManager: PackageManager;
   readonly force: boolean;
+  readonly withAgentsMd: boolean;
 }
 
 export function isInteractive(): boolean {
@@ -35,8 +36,9 @@ export async function promptForMissingOptions(options: CliOptions): Promise<Prom
     const orm = options.orm ?? (await promptChoice(rl, 'Select ORM', ormChoices, 'prisma'));
     const packageManager =
       options.packageManager ?? (await promptChoice(rl, 'Package manager', packageManagers, 'pnpm'));
+    const withAgentsMd = options.withAgentsMd ?? (await promptBoolean(rl, 'Include AGENTS.md for AI coding assistants?', false));
 
-    return { projectName, orm, packageManager, force: options.force };
+    return { projectName, orm, packageManager, force: options.force, withAgentsMd };
   } finally {
     rl?.close();
   }
@@ -46,6 +48,20 @@ async function promptProjectName(rl: ReturnType<typeof createInterface> | null):
   if (!rl) return 'my-nest-backend';
   const answer = (await rl.question('Project name: ')).trim();
   return answer || 'my-nest-backend';
+}
+
+async function promptBoolean(
+  rl: ReturnType<typeof createInterface> | null,
+  label: string,
+  fallback: boolean,
+): Promise<boolean> {
+  if (!rl) return fallback;
+  const hint = fallback ? 'Y/n' : 'y/N';
+  const answer = (await rl.question(`${label} (${hint}): `)).trim().toLowerCase();
+  if (!answer) return fallback;
+  if (answer === 'y' || answer === 'yes') return true;
+  if (answer === 'n' || answer === 'no') return false;
+  throw new Error(`Expected yes or no, received: ${answer}`);
 }
 
 async function promptChoice<T extends readonly string[]>(

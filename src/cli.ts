@@ -53,6 +53,14 @@ function parseArgs(args: readonly string[]): { help: boolean; version: boolean; 
       Object.assign(options, { force: true });
       continue;
     }
+    if (current === '--agents-md') {
+      Object.assign(options, { withAgentsMd: true });
+      continue;
+    }
+    if (current === '--no-agents-md') {
+      Object.assign(options, { withAgentsMd: false });
+      continue;
+    }
     if (current === '--orm') {
       Object.assign(options, { orm: parseChoice(args[++index], ormChoices, '--orm') });
       continue;
@@ -112,6 +120,8 @@ function printHelp(): void {
       `Options:\n` +
       `  --orm <typeorm|prisma|drizzle>       Select the ORM adapter\n` +
       `  --package-manager <pnpm|npm|yarn>    Choose package manager\n` +
+      `  --agents-md                          Generate AGENTS.md for AI coding assistants\n` +
+      `  --no-agents-md                       Skip AGENTS.md generation\n` +
       `  --force, -f                          Merge into a non-empty directory (overwrites generated files only)\n` +
       `  --version, -v                        Show CLI version\n` +
       `  --help, -h                           Show this help\n`,

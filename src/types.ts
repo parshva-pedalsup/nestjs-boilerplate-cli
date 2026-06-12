@@ -9,6 +9,7 @@ export interface CliOptions {
   readonly orm?: OrmChoice;
   readonly packageManager?: PackageManager;
   readonly force: boolean;
+  readonly withAgentsMd?: boolean;
 }
 
 export interface ProjectOptions {
@@ -18,6 +19,7 @@ export interface ProjectOptions {
   readonly packageManager: PackageManager;
   readonly targetDir: string;
   readonly force: boolean;
+  readonly withAgentsMd: boolean;
 }
 
 export interface FileEntry {
