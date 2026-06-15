@@ -41,7 +41,7 @@ export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
 }
 
 function readme(options: ProjectOptions): string {
-  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${options.packageManager} typecheck\n${options.packageManager} build\n\`\`\`\n\nDatabase setup and local runtime:\n\n\`\`\`bash\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production. See \`docs/getting-started.md\` and \`docs/orm-notes.md\` for the project workflow.\n`;
+  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${scriptCommand(options, 'typecheck')}\n${scriptCommand(options, 'build')}\n\`\`\`\n\nDatabase setup and local runtime:\n\n\`\`\`bash\ndocker compose up -d postgres\n${scriptCommand(options, 'db:migrate')}\n${scriptCommand(options, 'start:dev')}\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production. See \`docs/getting-started.md\` and \`docs/orm-notes.md\` for the project workflow.\n`;
 }
 
 function changelog(): string {
@@ -53,7 +53,7 @@ function architectureNotes(options: ProjectOptions): string {
 }
 
 function gettingStarted(options: ProjectOptions): string {
-  return `# Getting Started\n\n## First run\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${options.packageManager} typecheck\n${options.packageManager} build\n\`\`\`\n\n## Environment files\n\n- \`.env.example\` is committed documentation for required runtime configuration.\n- \`.env\` is local and gitignored.\n- \`liquibase.sample.properties\` is committed as the safe Liquibase template.\n- \`liquibase.properties\` is local and gitignored.\n\n## Database workflow\n\nLiquibase owns schema migrations. Add schema changes in \`migrations/changes/*.yaml\`, then include them from \`migrations/db.changelog-master.yaml\`. Keep ${options.orm} mappings aligned with those changelogs.\n\n## Common commands\n\n\`\`\`bash\n${options.packageManager} typecheck\n${options.packageManager} build\n${options.packageManager} test\n${options.packageManager} format:check\n\`\`\`\n\nDatabase and local runtime commands:\n\n\`\`\`bash\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\nScalar API docs are available at \`/docs\` after the app is running. The OpenAPI document is available at \`/openapi.json\`.\n`;
+  return `# Getting Started\n\n## First run\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${scriptCommand(options, 'typecheck')}\n${scriptCommand(options, 'build')}\n\`\`\`\n\n## Environment files\n\n- \`.env.example\` is committed documentation for required runtime configuration.\n- \`.env\` is local and gitignored.\n- \`liquibase.sample.properties\` is committed as the safe Liquibase template.\n- \`liquibase.properties\` is local and gitignored.\n\n## Database workflow\n\nLiquibase owns schema migrations. Add schema changes in \`migrations/changes/*.yaml\`, then include them from \`migrations/db.changelog-master.yaml\`. Keep ${options.orm} mappings aligned with those changelogs.\n\n## Common commands\n\n\`\`\`bash\n${scriptCommand(options, 'typecheck')}\n${scriptCommand(options, 'build')}\n${scriptCommand(options, 'test')}\n${scriptCommand(options, 'format:check')}\n\`\`\`\n\nDatabase and local runtime commands:\n\n\`\`\`bash\ndocker compose up -d postgres\n${scriptCommand(options, 'db:migrate')}\n${scriptCommand(options, 'start:dev')}\n\`\`\`\n\nScalar API docs are available at \`/docs\` after the app is running. The OpenAPI document is available at \`/openapi.json\`.\n`;
 }
 
 function ormNotes(options: ProjectOptions): string {
@@ -67,6 +67,12 @@ function ormNotes(options: ProjectOptions): string {
   } as const;
 
   return `# ORM Notes\n\nThis project uses ${options.orm} with Liquibase as the migration source of truth.\n\n## Ownership rule\n\nLiquibase owns database schema changes. The ORM describes how application code reads and writes that schema.\n\n## ${options.orm} mapping\n\n${notes[options.orm]}\n\n## Change workflow\n\n1. Add a Liquibase changeset under \`migrations/changes/\`.\n2. Include it from \`migrations/db.changelog-master.yaml\`.\n3. Update ${options.orm} schema/entity files to match the migrated database shape.\n4. Run typecheck and tests before shipping.\n`;
+}
+
+function scriptCommand(options: ProjectOptions, script: string): string {
+  return options.packageManager === 'npm'
+    ? `npm run ${script}`
+    : `${options.packageManager} ${script}`;
 }
 
 function envExample(): string {
