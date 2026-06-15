@@ -9,6 +9,8 @@ export interface CliOptions {
   readonly orm?: OrmChoice;
   readonly packageManager?: PackageManager;
   readonly force: boolean;
+  readonly dryRun: boolean;
+  readonly yes: boolean;
   readonly withAgentsMd?: boolean;
 }
 

@@ -32,17 +32,37 @@ export function resolveSafeProjectDirectory(cwd: string, projectName: string): s
 }
 
 export function packageNameFromProjectName(projectName: string): string {
-  return projectName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/^[._-]+/, '')
-    .replace(/[._-]+$/, '') || 'nest-backend';
+  return (
+    projectName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, '-')
+      .replace(/^[._-]+/, '')
+      .replace(/[._-]+$/, '') || 'nest-backend'
+  );
 }
 
 export function printNextSteps(projectName: string, packageManager: PackageManager): void {
   const install = packageManager === 'npm' ? 'npm install' : `${packageManager} install`;
+  const typecheck = packageManager === 'npm' ? 'npm run typecheck' : `${packageManager} typecheck`;
+  const build = packageManager === 'npm' ? 'npm run build' : `${packageManager} build`;
   const dev = packageManager === 'npm' ? 'npm run start:dev' : `${packageManager} start:dev`;
 
-  console.log(`\n✓ Created ${projectName}\n\nNext steps:\n  cd ${projectName}\n  cp .env.example .env\n  cp liquibase.sample.properties liquibase.properties\n  ${install}\n  docker compose up -d postgres\n  ${packageManager === 'npm' ? 'npm run db:migrate' : `${packageManager} db:migrate`}\n  ${dev}\n\nDocs will be available at http://localhost:3000/docs\n`);
+  console.log(
+    `\nCreated ${projectName}\n\n` +
+      `Next steps:\n` +
+      `  cd ${projectName}\n` +
+      `  cp .env.example .env\n` +
+      `  cp liquibase.sample.properties liquibase.properties\n` +
+      `  ${install}\n` +
+      `  ${typecheck}\n` +
+      `  ${build}\n\n` +
+      `Database setup when you are ready:\n` +
+      `  docker compose up -d postgres\n` +
+      `  ${packageManager === 'npm' ? 'npm run db:migrate' : `${packageManager} db:migrate`}\n\n` +
+      `Run locally:\n` +
+      `  ${dev}\n\n` +
+      `Liquibase owns schema migrations. Keep ORM schema/entity files aligned with Liquibase changelogs.\n` +
+      `Docs will be available at http://localhost:3000/docs\n`,
+  );
 }

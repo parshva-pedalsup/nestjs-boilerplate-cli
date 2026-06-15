@@ -6,8 +6,11 @@ export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
   return [
     { path: 'package.json', content: packageJson(options) },
     { path: 'README.md', content: readme(options) },
+    { path: 'CHANGELOG.md', content: changelog() },
     ...(options.withAgentsMd ? [{ path: 'AGENTS.md', content: agentsMd(options) }] : []),
     { path: 'docs/architecture.md', content: architectureNotes(options) },
+    { path: 'docs/getting-started.md', content: gettingStarted(options) },
+    { path: 'docs/orm-notes.md', content: ormNotes(options) },
     { path: '.env.example', content: envExample() },
     { path: '.gitignore', content: gitignore() },
     { path: '.oxlintrc.json', content: oxlintConfig() },
@@ -38,15 +41,36 @@ export function commonFiles(options: ProjectOptions): readonly FileEntry[] {
 }
 
 function readme(options: ProjectOptions): string {
-  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production.\n`;
+  return `# ${appTitle(options)}\n\nOpinionated production-grade NestJS backend generated with:\n\n- NestJS with strict TypeScript\n- ${options.orm} ORM adapter\n- PostgreSQL\n- Better Auth\n- Liquibase-owned database migrations\n- Scalar API reference at \`/docs\`\n- OpenAPI spec at \`/openapi.json\`\n- Class-validator DTO and env validation\n- Oxlint and Oxfmt instead of ESLint and Prettier\n- Helmet, compression, throttling, structured logging, health checks\n\n## Start\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${options.packageManager} typecheck\n${options.packageManager} build\n\`\`\`\n\nDatabase setup and local runtime:\n\n\`\`\`bash\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\n## Notes\n\nLiquibase is the source of truth for schema migrations. Keep ORM auto-sync disabled in production. See \`docs/getting-started.md\` and \`docs/orm-notes.md\` for the project workflow.\n`;
+}
+
+function changelog(): string {
+  return `# Changelog\n\nAll notable changes to this project should be documented in this file.\n\n## Unreleased\n\n- Initial generated NestJS backend scaffold.\n`;
 }
 
 function architectureNotes(options: ProjectOptions): string {
   return `# Architecture Notes\n\n## Opinionated choices\n\n- NestJS owns HTTP, dependency injection, validation, and module boundaries.\n- ${options.orm} is used for application data access.\n- Liquibase owns database schema migrations; ORM sync/migrate commands should not mutate production schema.\n- Better Auth owns authentication endpoints and session lifecycle.\n- Scalar renders API docs at \`/docs\` from \`/openapi.json\`. Swagger UI is intentionally disabled. Helmet CSP is configured to allow Scalar CDN assets.\n- Oxlint and Oxfmt replace ESLint and Prettier.\n- Better Auth and Drizzle share a single PostgreSQL pool via \`PgPoolModule\`.\n\n## Liquibase configuration\n\nCopy \`liquibase.sample.properties\` to \`liquibase.properties\` before running migrations. Keep the sample committed; the local properties file is gitignored. For \`db:migrate\`, Docker Compose supplies JDBC settings from \`.env\` \`POSTGRES_*\` variables using the internal URL \`postgres:5432\`. \`POSTGRES_PORT\` only controls the host port mapping (e.g. \`localhost:5433\`) and does not apply inside the Compose network.\n\n## Database migration rule\n\nCreate every schema change in \`migrations/changes/*.yaml\` and include it from \`migrations/db.changelog-master.yaml\`. Keep the ORM schema/entity files aligned with Liquibase changes.\n\n## Testing\n\n- \`pnpm test\` runs fast unit and slim e2e tests without a database.\n- \`pnpm test:integration\` boots the full app and requires Postgres plus \`RUN_INTEGRATION_TESTS=1\`.\n\n## Production checklist\n\n- Replace \`BETTER_AUTH_SECRET\` with a long random secret (32+ characters).\n- Restrict CORS origins.\n- Run behind TLS.\n- Use managed Postgres backups.\n- Run \`typecheck\`, \`lint\`, \`format:check\`, and tests in CI.\n`;
 }
 
+function gettingStarted(options: ProjectOptions): string {
+  return `# Getting Started\n\n## First run\n\n\`\`\`bash\ncp .env.example .env\ncp liquibase.sample.properties liquibase.properties\n${options.packageManager} install\n${options.packageManager} typecheck\n${options.packageManager} build\n\`\`\`\n\n## Environment files\n\n- \`.env.example\` is committed documentation for required runtime configuration.\n- \`.env\` is local and gitignored.\n- \`liquibase.sample.properties\` is committed as the safe Liquibase template.\n- \`liquibase.properties\` is local and gitignored.\n\n## Database workflow\n\nLiquibase owns schema migrations. Add schema changes in \`migrations/changes/*.yaml\`, then include them from \`migrations/db.changelog-master.yaml\`. Keep ${options.orm} mappings aligned with those changelogs.\n\n## Common commands\n\n\`\`\`bash\n${options.packageManager} typecheck\n${options.packageManager} build\n${options.packageManager} test\n${options.packageManager} format:check\n\`\`\`\n\nDatabase and local runtime commands:\n\n\`\`\`bash\ndocker compose up -d postgres\n${options.packageManager} db:migrate\n${options.packageManager} start:dev\n\`\`\`\n\nScalar API docs are available at \`/docs\` after the app is running. The OpenAPI document is available at \`/openapi.json\`.\n`;
+}
+
+function ormNotes(options: ProjectOptions): string {
+  const notes = {
+    prisma:
+      'Prisma Client is the application data-access layer. Keep `prisma/schema.prisma` aligned with Liquibase changelogs and use Prisma generation for client types, not schema ownership.',
+    drizzle:
+      'Drizzle is the application query layer. Keep `src/database/schema.ts` aligned with Liquibase changelogs and use Drizzle Kit studio for inspection, not schema ownership.',
+    typeorm:
+      'TypeORM entities are the application mapping layer. Keep `src/database/entities/*.ts` aligned with Liquibase changelogs and keep schema synchronization disabled for production use.',
+  } as const;
+
+  return `# ORM Notes\n\nThis project uses ${options.orm} with Liquibase as the migration source of truth.\n\n## Ownership rule\n\nLiquibase owns database schema changes. The ORM describes how application code reads and writes that schema.\n\n## ${options.orm} mapping\n\n${notes[options.orm]}\n\n## Change workflow\n\n1. Add a Liquibase changeset under \`migrations/changes/\`.\n2. Include it from \`migrations/db.changelog-master.yaml\`.\n3. Update ${options.orm} schema/entity files to match the migrated database shape.\n4. Run typecheck and tests before shipping.\n`;
+}
+
 function envExample(): string {
-  return `NODE_ENV=development\nPORT=3000\nAPP_NAME=Nest Backend\nAPP_ORIGIN=http://localhost:3000\nDATABASE_URL=postgresql://postgres:postgres@localhost:5432/app\nPOSTGRES_HOST=localhost\nPOSTGRES_PORT=5432\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=postgres\nPOSTGRES_DB=app\nBETTER_AUTH_SECRET=change-me-to-a-long-random-secret\nBETTER_AUTH_URL=http://localhost:3000\nLOG_LEVEL=info\nTHROTTLE_TTL_MS=60000\nTHROTTLE_LIMIT=100\n`;
+  return `# App\nNODE_ENV=development\nPORT=3000\nAPP_NAME=Nest Backend\nAPP_ORIGIN=http://localhost:3000\n\n# Database\nDATABASE_URL=postgresql://postgres:postgres@localhost:5432/app\nPOSTGRES_HOST=localhost\nPOSTGRES_PORT=5432\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=postgres\nPOSTGRES_DB=app\n\n# Auth\nBETTER_AUTH_SECRET=change-me-to-a-long-random-secret\nBETTER_AUTH_URL=http://localhost:3000\n\n# Logging and throttling\nLOG_LEVEL=info\nTHROTTLE_TTL_MS=60000\nTHROTTLE_LIMIT=100\n`;
 }
 
 function gitignore(): string {

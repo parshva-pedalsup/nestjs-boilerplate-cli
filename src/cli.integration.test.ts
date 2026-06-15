@@ -132,7 +132,11 @@ test('prints help output', () => {
   assert.match(result.stdout, /create-nestjs-backend <project-name>/);
   assert.match(result.stdout, /--orm <typeorm\|prisma\|drizzle>/);
   assert.match(result.stdout, /--agents-md/);
+  assert.match(result.stdout, /--dry-run/);
+  assert.match(result.stdout, /--yes, -y/);
   assert.match(result.stdout, /Non-interactive usage requires all options/);
+  assert.match(result.stdout, /create-nestjs-backend api --orm typeorm --package-manager npm --dry-run/);
+  assert.match(result.stdout, /create-nestjs-backend api --orm drizzle --package-manager yarn --agents-md/);
 });
 
 test('prints version output', () => {
@@ -156,6 +160,45 @@ test('rejects non-interactive runs without required flags', () => {
   const result = runCli([], distDir, { stdio: 'pipe' });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Non-interactive mode requires/);
+});
+
+test('rejects conflicting AGENTS.md flags', () => {
+  const result = runCli(
+    ['conflict-project', '--orm', 'prisma', '--package-manager', 'npm', '--agents-md', '--no-agents-md'],
+    distDir,
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Use only one of --agents-md or --no-agents-md/);
+});
+
+test('--dry-run prints generated files without creating the project', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-dry-run-'));
+  tempDirs.push(workspace);
+
+  const result = runCli(['dry-run-project', '--orm', 'prisma', '--package-manager', 'npm', '--dry-run'], workspace);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Dry run for dry-run-project/);
+  assert.match(result.stdout, /Files that would be generated \(\d+\):/);
+  assert.match(result.stdout, /package\.json/);
+  assert.match(result.stdout, /docs\/getting-started\.md/);
+  await assertNotExists(join(workspace, 'dry-run-project'));
+});
+
+test('--yes fills non-interactive defaults', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-yes-'));
+  tempDirs.push(workspace);
+
+  const result = runCli(['yes-project', '--yes'], workspace);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const projectDir = join(workspace, 'yes-project');
+  const packageJson = await readJson<{
+    dependencies: Record<string, string>;
+    devDependencies: Record<string, string>;
+  }>(join(projectDir, 'package.json'));
+  assert.ok(packageJson.dependencies['@prisma/client']);
+  assert.ok(packageJson.devDependencies.prisma);
+  await assertNotExists(join(projectDir, 'AGENTS.md'));
 });
 
 test('rejects writing into a non-empty directory without --force', async () => {
@@ -183,10 +226,27 @@ test('merges into a non-empty directory with --force and preserves unrelated fil
 
   const result = runCli([projectName, '--orm', 'prisma', '--package-manager', 'npm', '--force'], workspace);
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Generated \d+ files/);
+  assert.match(result.stdout, /Merged into existing directory without overwriting generated files/);
 
   const keep = await readFile(join(projectDir, 'keep.txt'), 'utf8');
   assert.equal(keep, 'do not delete');
   await assertExists(join(projectDir, 'package.json'));
+});
+
+test('--force reports overwritten generated files', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'create-nest-backend-force-overwrite-'));
+  tempDirs.push(workspace);
+
+  const projectName = 'force-overwrite-project';
+  const projectDir = join(workspace, projectName);
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(join(projectDir, 'package.json'), '{"name":"old"}\n', 'utf8');
+
+  const result = runCli([projectName, '--orm', 'prisma', '--package-manager', 'npm', '--force'], workspace);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Overwrote \d+ generated files:/);
+  assert.match(result.stdout, /package\.json/);
 });
 
 test('assertUniqueFilePaths rejects duplicate template paths', () => {
@@ -258,6 +318,21 @@ test('generates a working Prisma scaffold shape', async () => {
   assertPinnedDependencies(packageJson);
 
   await assertExists(join(projectDir, 'prisma.config.ts'));
+  await assertExists(join(projectDir, 'CHANGELOG.md'));
+  await assertExists(join(projectDir, 'docs/getting-started.md'));
+  await assertExists(join(projectDir, 'docs/orm-notes.md'));
+
+  const envExample = await readFile(join(projectDir, '.env.example'), 'utf8');
+  assert.match(envExample, /# App/);
+  assert.match(envExample, /# Database/);
+  assert.match(envExample, /# Auth/);
+
+  const gettingStarted = await readFile(join(projectDir, 'docs/getting-started.md'), 'utf8');
+  assert.match(gettingStarted, /pnpm typecheck|npm run typecheck/);
+  assert.match(gettingStarted, /Liquibase owns schema migrations/);
+
+  const ormNotes = await readFile(join(projectDir, 'docs/orm-notes.md'), 'utf8');
+  assert.match(ormNotes, /Prisma Client is the application data-access layer/);
 
   const prismaConfig = await readFile(join(projectDir, 'prisma.config.ts'), 'utf8');
   assert.match(prismaConfig, /env\('DATABASE_URL'\)/);

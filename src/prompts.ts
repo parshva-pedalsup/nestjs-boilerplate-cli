@@ -16,6 +16,19 @@ export function isInteractive(): boolean {
 }
 
 export async function promptForMissingOptions(options: CliOptions): Promise<PromptResult> {
+  if (options.yes) {
+    const projectName = options.projectName ?? 'my-nest-backend';
+    validateProjectName(projectName);
+
+    return {
+      projectName,
+      orm: options.orm ?? 'prisma',
+      packageManager: options.packageManager ?? 'pnpm',
+      force: options.force,
+      withAgentsMd: options.withAgentsMd ?? false,
+    };
+  }
+
   if (!isInteractive()) {
     const missing: string[] = [];
     if (!options.projectName) missing.push('<project-name>');

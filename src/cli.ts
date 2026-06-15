@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module';
 import { readdir } from 'node:fs/promises';
-import { generateProject } from './generator.js';
+import { generateProject, resolveFiles } from './generator.js';
 import { promptForMissingOptions } from './prompts.js';
-import { type CliOptions, ormChoices, packageManagers } from './types.js';
+import { type CliOptions, type FileEntry, ormChoices, packageManagers } from './types.js';
 import { packageNameFromProjectName, printNextSteps, resolveSafeProjectDirectory } from './utils.js';
 
 const require = createRequire(import.meta.url);
@@ -22,15 +22,21 @@ export async function runCli(args: readonly string[]): Promise<void> {
 
     const answers = await promptForMissingOptions(parsed.options);
     const targetDir = resolveSafeProjectDirectory(process.cwd(), answers.projectName);
-
-    await assertTargetDirectory(targetDir, answers.force);
-
-    await generateProject({
+    const projectOptions = {
       ...answers,
       packageName: packageNameFromProjectName(answers.projectName),
       targetDir,
-    });
+    };
 
+    if (parsed.options.dryRun) {
+      printDryRun(answers.projectName, targetDir, resolveFiles(projectOptions));
+      return;
+    }
+
+    await assertTargetDirectory(targetDir, answers.force);
+
+    const result = await generateProject(projectOptions);
+    printGenerationSummary(result.files.length, result.overwrittenFiles, result.mergedIntoExistingDirectory);
     printNextSteps(answers.projectName, answers.packageManager);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -40,8 +46,9 @@ export async function runCli(args: readonly string[]): Promise<void> {
 }
 
 function parseArgs(args: readonly string[]): { help: boolean; version: boolean; options: CliOptions } {
-  const options: CliOptions = { force: false };
+  const options: CliOptions = { force: false, dryRun: false, yes: false };
   let projectName: string | undefined;
+  let agentsMdFlag: '--agents-md' | '--no-agents-md' | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
@@ -53,11 +60,23 @@ function parseArgs(args: readonly string[]): { help: boolean; version: boolean; 
       Object.assign(options, { force: true });
       continue;
     }
+    if (current === '--dry-run') {
+      Object.assign(options, { dryRun: true });
+      continue;
+    }
+    if (current === '--yes' || current === '-y') {
+      Object.assign(options, { yes: true });
+      continue;
+    }
     if (current === '--agents-md') {
+      if (agentsMdFlag === '--no-agents-md') throw new Error('Use only one of --agents-md or --no-agents-md.');
+      agentsMdFlag = '--agents-md';
       Object.assign(options, { withAgentsMd: true });
       continue;
     }
     if (current === '--no-agents-md') {
+      if (agentsMdFlag === '--agents-md') throw new Error('Use only one of --agents-md or --no-agents-md.');
+      agentsMdFlag = '--no-agents-md';
       Object.assign(options, { withAgentsMd: false });
       continue;
     }
@@ -92,6 +111,35 @@ function parseArgs(args: readonly string[]): { help: boolean; version: boolean; 
   };
 }
 
+function printDryRun(projectName: string, targetDir: string, files: readonly FileEntry[]): void {
+  console.log(`\nDry run for ${projectName}`);
+  console.log(`Target directory: ${targetDir}`);
+  console.log(`Files that would be generated (${files.length}):`);
+  for (const file of files) {
+    console.log(`  ${file.path}`);
+  }
+}
+
+function printGenerationSummary(
+  fileCount: number,
+  overwrittenFiles: readonly string[],
+  mergedIntoExistingDirectory: boolean,
+): void {
+  console.log(`\nGenerated ${fileCount} files.`);
+
+  if (!mergedIntoExistingDirectory) return;
+
+  if (overwrittenFiles.length === 0) {
+    console.log('Merged into existing directory without overwriting generated files.');
+    return;
+  }
+
+  console.log(`Overwrote ${overwrittenFiles.length} generated files:`);
+  for (const path of overwrittenFiles) {
+    console.log(`  ${path}`);
+  }
+}
+
 function parseChoice<T extends readonly string[]>(value: string | undefined, choices: T, flag: string): T[number] {
   if (!value || !choices.includes(value)) {
     throw new Error(`${flag} must be one of: ${choices.join(', ')}`);
@@ -122,8 +170,15 @@ function printHelp(): void {
       `  --package-manager <pnpm|npm|yarn>    Choose package manager\n` +
       `  --agents-md                          Generate AGENTS.md for AI coding assistants\n` +
       `  --no-agents-md                       Skip AGENTS.md generation\n` +
+      `  --dry-run                            Print generated file paths without writing files\n` +
+      `  --yes, -y                            Use defaults for missing options (prisma, pnpm, no AGENTS.md)\n` +
       `  --force, -f                          Merge into a non-empty directory (overwrites generated files only)\n` +
       `  --version, -v                        Show CLI version\n` +
-      `  --help, -h                           Show this help\n`,
+      `  --help, -h                           Show this help\n\n` +
+      `Examples:\n` +
+      `  create-nestjs-backend api --orm prisma --package-manager pnpm\n` +
+      `  create-nestjs-backend api --orm typeorm --package-manager npm --dry-run\n` +
+      `  create-nestjs-backend api --orm drizzle --package-manager yarn --agents-md\n` +
+      `  create-nestjs-backend api --yes\n`,
   );
 }
